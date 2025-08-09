@@ -7,5 +7,6 @@ package agai.heatmod.data.temperature;
  * 记录温度历史（用于计算变化趋势）
  * 标记是否为热源 / 冷源
  * 提供温度修改的方法（考虑热力学限制）*/
+@Deprecated
 public class TemperatureData {
 }

@@ -1,1 +1,12 @@
 添加温度
+
+一个chunk->多个chunk
+
+
+添加blockEntity 作为冷热源
+
+
+chunk -> 并行计算
+
+
+ASM操控注释,(​​使用字节码工具（如 ASM）分析注解​)

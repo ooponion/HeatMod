@@ -7,4 +7,5 @@ package agai.heatmod.content.temperature.thermodynamics;
  * 考虑距离衰减（平方反比定律）
  * 处理不同方块对辐射的吸收 / 反射率*/
 public class HeatRadiation {
+    //修正值 = Σ(所有热源 * e^(-距离/衰减系数))
 }

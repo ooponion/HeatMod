@@ -134,7 +134,7 @@
 管理温度相关的状态效果
 
 数据管理与存储
-17. ChunkTemperatureStorage
+17. ChunkTemperatureData
 职责：管理区块级别的温度数据存储
 核心功能：
 将温度数据与区块关联存储
