@@ -1,10 +1,11 @@
 package agai.heatmod.data.temperature.data;
 
 import agai.heatmod.annotators.ApiDoc;
+import agai.heatmod.annotators.DependsOn;
 import agai.heatmod.annotators.InWorking;
-import agai.heatmod.bootstrap.thermal.ThermalMaterialRegistry;
 import agai.heatmod.content.temperature.hotandcoolsources.ThermalChangeSource;
 import agai.heatmod.data.temperature.ThermalDataManager;
+import agai.heatmod.data.temperature.WorldTemperature;
 import agai.heatmod.data.temperature.data.impl.ChunkTemperatureIntf;
 import agai.heatmod.utils.SystemOutHelper;
 import agai.heatmod.utils.codec.CompressDifferCodec;
@@ -17,6 +18,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
@@ -40,6 +44,7 @@ public class ChunkTemperatureData implements ChunkTemperatureIntf , Serializable
     );
     // 所属区块坐标
     private final ChunkPos chunkPos;
+    private final Level level;//not often used
 
     private final ResourceKey<Level> levelResourceKey;
 
@@ -62,46 +67,50 @@ public class ChunkTemperatureData implements ChunkTemperatureIntf , Serializable
     // 温度差异阈值：超过此值才会被存储（减少存储量）
     private static final float TEMP_STORAGE_THRESHOLD = 2.0f;
 
-    public ChunkTemperatureData( @NotNull ChunkPos chunkPos, @NotNull ResourceKey<Level> levelResourceKey, @NotNull float initialAvgTemp) {
+    public ChunkTemperatureData( @NotNull ChunkPos chunkPos, @NotNull ResourceKey<Level> levelResourceKey, @NotNull float initialAvgTemp,@NotNull Level level) {
         this.chunkPos = chunkPos;
         this.averageTemperature = initialAvgTemp;
         this.levelResourceKey = levelResourceKey;
+        this.level = level;
     }
-    public ChunkTemperatureData( @NotNull ChunkPos chunkPos, float initialAvgTemp) {
-        this(chunkPos, Level.OVERWORLD, initialAvgTemp);
+    public ChunkTemperatureData( @NotNull ChunkPos chunkPos, float initialAvgTemp,@NotNull Level level) {
+        this(chunkPos, Level.OVERWORLD, initialAvgTemp,level);
     }
-    public ChunkTemperatureData( @NotNull ChunkPos chunkPos) {
-        this(chunkPos, Level.OVERWORLD, 37f);
+    public ChunkTemperatureData( @NotNull ChunkPos chunkPos,@NotNull Level level) {
+        this(chunkPos, Level.OVERWORLD, 27f,level);
     }
-    public ChunkTemperatureData() {
-        this(new ChunkPos(0,0));
+    public ChunkTemperatureData(@NotNull Level level) {
+        this(new ChunkPos(0,0),level);
     }
+
 
     public ChunkTemperatureData(ChunkPos chunkPos,
                                 Map<Integer, Float> blockTemperatures,
                                 List<ThermalChangeSource> activeThermalSources,
                                 float averageTemperature,   Map<Integer, Float> thermalConductionCache,ResourceKey<Level> levelResourceKey) {
         this.chunkPos = chunkPos;
-        this.blockTemperatures = blockTemperatures;
-        this.activeThermalSources = activeThermalSources;
+        this.blockTemperatures = new HashMap<>(blockTemperatures);
+        this.activeThermalSources = new ArrayList<>(activeThermalSources);
         this.averageTemperature = averageTemperature;
-        this.thermalConductionCache = thermalConductionCache;
+        this.thermalConductionCache = new HashMap<>(thermalConductionCache);
         this.levelResourceKey = levelResourceKey;
+        this.level= ServerLifecycleHooks.getCurrentServer().getLevel(levelResourceKey);
     }
 
 
     /**
      * 获取指定位置的温度
      */
+    @DependsOn(clazz=WorldTemperature.class)//如果之后这个类的block()方法改了就不能用这个作为默认值
     public float getTemperature(BlockPos pos) {
         if (!isPosInChunk(pos)) {
-            return ThermalDataManager.INSTANCE.getTemperature(levelResourceKey,pos);
+            return WorldTemperature.block(level, pos);
         }
 
 
         int key = encodeLocalPos(pos);
         if(!blockTemperatures.containsKey(key)) {
-            setTemperature(pos, averageTemperature);
+            setTemperature(pos, WorldTemperature.block(level, pos));
         }
         return blockTemperatures.get(key);
     }
@@ -116,19 +125,18 @@ public class ChunkTemperatureData implements ChunkTemperatureIntf , Serializable
 
 
         int key = encodeLocalPos(pos);
-
         blockTemperatures.put(key, temperature);
     }
 
-    public void accumulateThermalDelta(BlockPos pos, float delta) {
+    public void accumulateTempToCache(BlockPos pos, float delta) {
         int key = encodeLocalPos(pos);
-        thermalConductionCache.put(key, delta + thermalConductionCache.get(key));
+        thermalConductionCache.put(key, delta + thermalConductionCache.getOrDefault(key,0f));
     }
 
-    public void transferHeatFromCache(BlockPos pos) {
+    public void transferTempFromCache(BlockPos pos) {
         int key = encodeLocalPos(pos);
-        float delta = thermalConductionCache.get(key);
-        blockTemperatures.put(key, delta + blockTemperatures.get(key));
+        blockTemperatures.put(key, thermalConductionCache.get(key) + blockTemperatures.get(key));
+        thermalConductionCache.remove(key);
     }
 
     /**
@@ -154,7 +162,7 @@ public class ChunkTemperatureData implements ChunkTemperatureIntf , Serializable
     public void addSource(ChunkAccess access, BlockPos blockPos) {
         BlockState state = access.getBlockState(blockPos);
         var dimension=((LevelChunk)access).getLevel().dimension();
-        if (ThermalMaterialRegistry.isSource(state)) {
+        if(ThermalDataManager.INSTANCE.isSource(access,blockPos)) {
             activeThermalSources.add(new ThermalChangeSource(
                     state,
                     blockPos,
@@ -164,10 +172,8 @@ public class ChunkTemperatureData implements ChunkTemperatureIntf , Serializable
         SystemOutHelper.printfplain("add sources: ", blockPos);
     }
     public void removeSource(ChunkAccess access, final BlockPos blockPos) {
-        BlockState state = access.getBlockState(blockPos);
-        if (ThermalMaterialRegistry.isHeatSource(state)) {
-            activeThermalSources.removeIf(heatSourceData -> {return heatSourceData.getBlockPos().equals(blockPos);});
-        }
+
+        activeThermalSources.removeIf(heatSourceData -> {return heatSourceData.getBlockPos().equals(blockPos);});
         SystemOutHelper.printfplain("delete sources: ", blockPos);
     }
     /**

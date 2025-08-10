@@ -1,5 +1,6 @@
 package agai.heatmod.data.temperature.recipeData.reloadListener;
 
+import agai.heatmod.bootstrap.thermal.TempRecipeRegistry;
 import agai.heatmod.content.temperature.player.BodyPart;
 import agai.heatmod.data.temperature.recipeData.*;
 import agai.heatmod.utils.builder.EnumDefaultedMap;

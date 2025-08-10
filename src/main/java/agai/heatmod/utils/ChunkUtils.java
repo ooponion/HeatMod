@@ -6,6 +6,8 @@ import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.ChunkPos;
 
@@ -55,16 +57,17 @@ public class ChunkUtils {
         return new BlockPos(chunkPos.x << 4, 0, chunkPos.z << 4);
     }
     /**反射获取visibleChunkMap*/
-    public static Iterable<ChunkHolder> getVisibleChunkMap(ServerChunkCache chunkManager) {
+    public static Iterable<ChunkHolder> getVisibleChunkMap(ServerLevel serverLevel) {
         try {
+            ServerChunkCache chunkManager =serverLevel.getChunkSource();
             ChunkMap chunkStorage = chunkManager.chunkMap;
             return (Iterable<ChunkHolder>) getChunks.invoke(chunkStorage);
         } catch (InvocationTargetException | IllegalAccessException e) {
             throw new RuntimeException("Failed to reflect chunk map", e);
         }
     }
-    public static List<LevelChunk> getAllLoadedLevelChunks(ServerLevel level) {
-        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(level.getChunkSource());
+    public static List<LevelChunk> getAllLoadedLevelChunks(ServerLevel serverLevel) {
+        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(serverLevel);
         List<LevelChunk> chunks = new ArrayList<>();
         for (ChunkHolder holder : visibleChunkMap) {
             LevelChunk chunk = holder.getTickingChunk();
@@ -77,8 +80,8 @@ public class ChunkUtils {
         }
         return chunks;
     }
-    public static List<LevelChunk> getAllFullLevelChunks(ServerLevel level) {
-        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(level.getChunkSource());
+    public static List<LevelChunk> getAllFullLevelChunks(ServerLevel serverLevel) {
+        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(serverLevel);
         List<LevelChunk> chunks = new ArrayList<>();
         for (ChunkHolder holder : visibleChunkMap) {
             LevelChunk chunk = holder.getFullChunk();
@@ -88,8 +91,8 @@ public class ChunkUtils {
         }
         return chunks;
     }
-    public static List<LevelChunk> getAllTickingLevelChunks(ServerLevel level) {
-        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(level.getChunkSource());
+    public static List<LevelChunk> getAllTickingLevelChunks(ServerLevel serverLevel) {
+        var visibleChunkMap = ChunkUtils.getVisibleChunkMap(serverLevel);
         List<LevelChunk> chunks = new ArrayList<>();
         for (ChunkHolder holder : visibleChunkMap) {
             LevelChunk chunk = holder.getTickingChunk();

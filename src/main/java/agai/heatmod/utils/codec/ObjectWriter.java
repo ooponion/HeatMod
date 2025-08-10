@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.teammoeg.chorda.io.SerializeUtil;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.FriendlyByteBuf;

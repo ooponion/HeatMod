@@ -35,7 +35,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.MapLike;
 import com.mojang.serialization.RecordBuilder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import com.teammoeg.chorda.io.SerializeUtil;
+
 
 public class BooleansCodec extends MapCodec<boolean[]> {
 	public static class BooleanCodecBuilder<O>{

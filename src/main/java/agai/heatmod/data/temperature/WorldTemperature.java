@@ -1,13 +1,27 @@
 package agai.heatmod.data.temperature;
 
-import agai.heatmod.bootstrap.thermal.DimensionTempRegistry;
+import agai.heatmod.annotators.DependsOn;
+import agai.heatmod.annotators.NeedImprovement;
 import agai.heatmod.content.climate.WorldClimate;
+import agai.heatmod.data.temperature.recipeData.BiomeTempData;
+import agai.heatmod.data.temperature.recipeData.BlockTempData;
+import agai.heatmod.data.temperature.recipeData.DimensionTempData;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
+import java.util.HashMap;
+import java.util.Map;
+
+@NeedImprovement
+
+/**还没和我的合并*/
 public class WorldTemperature {
     /**
      * World Temperature API on the server side.
@@ -208,9 +222,11 @@ public class WorldTemperature {
     public static final float TEMPERATURE_CHANGE_PER_BLOCK_BELOW_STONE_INTERFACE = 0.1F;
     public static final float TEMPERATURE_CHANGE_PER_BLOCK_BELOW_LAVA_INTERFACE = 20F;
 
-
+    public static Map<Level, Float> dimensionCache = new HashMap<>();//缓存减少从Data读取提高性能
+    public static Map<Biome, Float> biomeCache = new HashMap<>();
     public static void clear() {
-
+        dimensionCache.clear();
+        biomeCache.clear();
     }
 
     /**
@@ -221,7 +237,7 @@ public class WorldTemperature {
     public static float dimension(LevelReader w) {
         float wt = OVERWORLD_BASELINE;
         if (w instanceof Level level) {
-            wt= DimensionTempRegistry.getWorldTemperature(level);
+            wt= dimensionCache.computeIfAbsent(level, t-> DimensionTempData.getWorldTemp(level));
         }
         return wt;
     }
@@ -264,6 +280,9 @@ public class WorldTemperature {
      */
     public static float altitude(LevelReader w, BlockPos pos) {
         // TODO: This is for only overworld
+        if(!((Level)w).dimension().equals(Level.OVERWORLD)) {
+            return 0;
+        }
         int y = pos.getY();
         // extremely lowers above stratosphere
         if (y > STRATOSPHERE_LEVEL) {
@@ -314,7 +333,20 @@ public class WorldTemperature {
      * This value is dynamic in game.
      */
     public static float heat(LevelReader world, BlockPos pos) {
-        return ChunkHeatData.get(world, new ChunkPos(pos)).map(t -> t.getAdditionTemperatureAtBlock(world, pos)).orElse(0f);
+        Block block = world.getBlockState(pos).getBlock();
+        BlockTempData data=BlockTempData.getData(block);
+        if (data == null) {
+            return BlockTempData.getDefaultSourceTemperature();
+        }
+        return data.getSourceTemperature();
+    }
+    public static float power(LevelReader world, BlockPos pos) {
+        Block block = world.getBlockState(pos).getBlock();
+        BlockTempData data=BlockTempData.getData(block);
+        if (data == null) {
+            return BlockTempData.getDefaultSourcePower();
+        }
+        return data.getSourcePower();
     }
 
     public static float gaussian(LevelReader world, float mean, float std) {
@@ -400,24 +432,24 @@ public class WorldTemperature {
         return Math.max(ABSOLUTE_ZERO, result);
     }
 
-    /**
-     * Convenience method for checking is Blizzard in specific world
-     *
-     * */
-    public static boolean isBlizzard(LevelReader w) {
-        if (w instanceof Level l) {
-            return WorldClimate.isBlizzard(l);
-        }
-        return false;
-    }
-    /**
-     * Convenience method for checking wind strength in specific world.
-     * @return Range 0-100
-     * */
-    public static int wind(LevelReader w) {
-        if (w instanceof Level l) {
-            return WorldClimate.getWind(l);
-        }
-        return 0;
-    }
+//    /**
+//     * Convenience method for checking is Blizzard in specific world
+//     *
+//     * */
+//    public static boolean isBlizzard(LevelReader w) {
+//        if (w instanceof Level l) {
+//            return WorldClimate.isBlizzard(l);
+//        }
+//        return false;
+//    }
+//    /**
+//     * Convenience method for checking wind strength in specific world.
+//     * @return Range 0-100
+//     * */
+//    public static int wind(LevelReader w) {
+//        if (w instanceof Level l) {
+//            return WorldClimate.getWind(l);
+//        }
+//        return 0;
+//    }
 }

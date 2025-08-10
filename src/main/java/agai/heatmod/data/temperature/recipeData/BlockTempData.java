@@ -1,6 +1,8 @@
 package agai.heatmod.data.temperature.recipeData;
 
+import agai.heatmod.data.temperature.properties.BlockThermalProperties;
 import agai.heatmod.utils.recipe.CodecRecipeSerializer;
+import agai.heatmod.utils.recipe.DataContainerRecipe;
 import com.google.common.collect.ImmutableMap;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -9,12 +11,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class BlockTempData{
@@ -53,11 +58,11 @@ public class BlockTempData{
     private float emissivity;//(0~1)
     private float specificHeatCapacity;
     private float thermalConductivity;
-    private float mass;
+    private float mass;// 1block=1kg
 
     private int insulationLevel;//0-10
     private boolean isActiveSource;
-    private float sourcePower;
+    private float sourcePower;  //kw
     
     @Nullable
     public static BlockTempData getData(Block block) {
@@ -66,7 +71,7 @@ public class BlockTempData{
 
     public static void updateCache(RecipeManager manager) {
         Collection<Recipe<?>> recipes = manager.getRecipes();
-        BlockTempData.CACHE = BlockTempData.TYPE.get().filterRecipes(recipes).collect(Collectors.toMap(t->t.getData().getBlock(), t->t.getData()));
+        BlockTempData.CACHE = BlockTempData.TYPE.get().filterRecipes(recipes).collect(Collectors.toMap(t->t.getData().getBlock(), DataContainerRecipe::getData));
     }
     public FinishedRecipe toFinished(ResourceLocation name) {
         return TYPE.get().toFinished(name, this);
@@ -138,6 +143,12 @@ public class BlockTempData{
 
     public float getSourcePower() {
         return sourcePower;
+    }
+    public static float getDefaultSourcePower() {
+        return 27;
+    }
+    public static float getDefaultSourceTemperature() {
+        return 27;
     }
 
     public void setSourcePower(float sourcePower) {

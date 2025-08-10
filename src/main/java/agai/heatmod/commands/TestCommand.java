@@ -51,7 +51,7 @@ public class TestCommand {
         SystemOutHelper.printfplain("registered?: chunk:%s  global:%s",ChunkTemperatureCapability.CAPABILITY.isRegistered()
         ,GlobalTemperatureCapability.CAPABILITY.isRegistered());
         SystemOutHelper.printfplain("registered2?: global:%s  chunk:%s  chunk_values:%s",globalLazy.orElse(null)
-        ,chunkLazy.orElse(null),chunkLazy.orElse(new ChunkTemperatureData(pos)).getTemperature(blockPos));
+        ,chunkLazy.orElse(null),chunkLazy.orElse(new ChunkTemperatureData(pos,context.getSource().getLevel())).getTemperature(blockPos));
 
         return 1; // 命令执行成功的返回值（约定为1）
     }

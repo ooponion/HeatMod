@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "agai.heatmod.mixins",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "heatmod.mixins.json",
+  "mixins": [
+    "ServalLevel_ChunkUpdate_mixin"
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

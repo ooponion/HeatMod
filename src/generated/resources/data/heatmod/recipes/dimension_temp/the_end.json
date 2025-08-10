@@ -1,0 +1,5 @@
+{
+  "type": "heatmod:dimension_temp",
+  "temperature": -300.0,
+  "world": "minecraft:the_end"
+}

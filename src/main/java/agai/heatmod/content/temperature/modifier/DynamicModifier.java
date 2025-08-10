@@ -14,7 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LevelAccessor;
 
 import java.util.*;
-
+@Deprecated
 @ApiDoc(description = "作用: 给modifiers一个抽象类")
 public abstract class DynamicModifier<T>{
     public static final Codec<DynamicModifier<?>> CODEC = createPolymorphicCodec();

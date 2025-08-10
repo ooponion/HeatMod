@@ -1,6 +1,7 @@
 package agai.heatmod.bootstrap.thermal;
 
 import agai.heatmod.data.temperature.recipeData.*;
+import agai.heatmod.utils.SystemOutHelper;
 import agai.heatmod.utils.recipe.CodecRecipeSerializer;
 import agai.heatmod.utils.recipe.DataContainerRecipe;
 import com.mojang.serialization.Codec;
@@ -8,9 +9,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+
+import java.util.Arrays;
 
 import static agai.heatmod.Heatmod.MODID;
 
@@ -22,7 +28,7 @@ public class TempRecipeRegistry {
             ForgeRegistries.RECIPE_TYPES, MODID);
 
     static {
-
+        SystemOutHelper.printfplain("Registering Recipe Serializers."+ ArmorTempData.TYPE);
         ArmorTempData.TYPE = createCodecRecipeType("armor_temp", ArmorTempData.CODEC);
         BiomeTempData.TYPE = createCodecRecipeType("biome_temp", BiomeTempData.CODEC);
         BlockTempData.TYPE = createCodecRecipeType("block_temp", BlockTempData.CODEC);
@@ -32,7 +38,11 @@ public class TempRecipeRegistry {
 //        FoodTempData.TYPE = createCodecRecipeType("food_temp", FoodTempData.CODEC);
 //        PlantTempData.TYPE = createCodecRecipeType("plant_temp", PlantTempData.CODEC);
         DimensionTempData.TYPE = createCodecRecipeType("dimension_temp", DimensionTempData.CODEC);
-
+        SystemOutHelper.printfplain("finishing registering Recipe Serializers.");
+    }
+    public static void register(IEventBus mod){
+        RECIPE_SERIALIZERS.register(mod);
+        RECIPE_TYPES.register(mod);
     }
 
     public static <T extends Recipe<?>> RegistryObject<RecipeType<T>> createRecipeType(String name) {

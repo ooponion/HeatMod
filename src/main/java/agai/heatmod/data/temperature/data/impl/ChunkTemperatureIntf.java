@@ -19,6 +19,7 @@ public interface ChunkTemperatureIntf {
     void removeSource(ChunkAccess access, final BlockPos blockPos);
 
     void updateAverageTemperature() ;
-    void accumulateThermalDelta(BlockPos pos, float delta);
-    void transferHeatFromCache(BlockPos pos);
+    /**不是热量!是温度变化!*/
+    void accumulateTempToCache(BlockPos pos, float heat);
+    void transferTempFromCache(BlockPos pos);
 }

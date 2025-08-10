@@ -1,0 +1,5 @@
+{
+  "type": "heatmod:dimension_temp",
+  "temperature": 27,
+  "world": "minecraft:overworld"
+}

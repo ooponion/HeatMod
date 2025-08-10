@@ -1,9 +1,16 @@
 package agai.heatmod.content.temperature.controllers;
 
 
+import agai.heatmod.annotators.InTest;
+import agai.heatmod.content.temperature.thermodynamics.HeatConduction;
+import agai.heatmod.content.temperature.thermodynamics.HeatConvection;
+import agai.heatmod.content.temperature.thermodynamics.HeatRadiation;
 import agai.heatmod.data.temperature.ThermalDataManager;
+import agai.heatmod.data.temperature.capabilities.ChunkTemperatureCapability;
 import agai.heatmod.utils.ChunkUtils;
+import agai.heatmod.utils.SystemOutHelper;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.List;
@@ -16,15 +23,32 @@ import java.util.List;
  提供温度查询的统一接口*/
 public class ThermalEngine {
     public static final ThermalEngine INSTANCE = new ThermalEngine();
+
+
+    private HeatConduction heatConduction=new HeatConduction();
+    private HeatConvection heatConvection=new HeatConvection();
+    private HeatRadiation heatRadiation=new HeatRadiation();
     public ThermalEngine() {}
-    public void ThermoCalco(List<LevelChunk> chunks) {
-
-    }
-    public void ThermoCalcoChunk(LevelChunk chunk) {
-        for(BlockPos blockPos: ChunkUtils.getAllBlockPosInChunk(chunk)) {
-            ThermalDataManager.INSTANCE.setTemperature();
+    /**This method will update the temperature of each visible block through thermodynamics.*/
+    @InTest
+    public void applyThermodynamics(ServerLevel level) {
+        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
+            var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
+            if(capability.isPresent()) {
+                capability.ifPresent(cap->{
+                    for(BlockPos blockPos:ChunkUtils.getAllBlockPosInChunk(chunk)) {
+                        heatConduction.conductHeatToNeighboursCache(level,blockPos);
+                        heatRadiation.radiateHeatToSurroundingsCache(level,blockPos);
+                        heatConvection.convectHeatToAirCache(level,blockPos);
+                    }
+                });
+            }else{
+                SystemOutHelper.printfplain("applyThermodynamics(), this chunk("+chunk.getPos()+") has no capability!");
+            }
         }
-
+        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
+            ThermalDataManager.INSTANCE.transferChunkHeatFromCache(level,chunk.getPos());
+        }
     }
 }
 

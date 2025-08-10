@@ -22,12 +22,11 @@ package agai.heatmod.utils.codec;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import agai.heatmod.utils.CodecUtil;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
-import com.teammoeg.chorda.io.CodecUtil;
-
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 
