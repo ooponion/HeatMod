@@ -212,7 +212,7 @@ public class ThermalEngine {
     public void syncAsyncResults(ServerLevel level, List<ChunkTemperatureIntf> capacities) {
         for (ChunkTemperatureIntf chunkTemperatureIntf : capacities) {
             var chunkPos=chunkTemperatureIntf.getChunkPos();
-            ThermalDataManager.INSTANCE.getChunkTempData(level,chunkPos).
+            ThermalDataManager.INSTANCE.getChunkTempData(level,chunkPos).syncFromOther(chunkTemperatureIntf);
         }
     }
 }
