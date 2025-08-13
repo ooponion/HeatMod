@@ -1,8 +1,14 @@
 package agai.heatmod.commands;
 
+import agai.heatmod.content.temperature.controllers.ThermalEngine;
+import agai.heatmod.content.temperature.thermodynamics.HeatConduction;
+import agai.heatmod.content.temperature.thermodynamics.HeatConvection;
+import agai.heatmod.content.temperature.thermodynamics.HeatRadiation;
+import agai.heatmod.data.temperature.ThermalDataManager;
 import agai.heatmod.data.temperature.capabilities.ChunkTemperatureCapability;
 import agai.heatmod.data.temperature.capabilities.GlobalTemperatureCapability;
 import agai.heatmod.data.temperature.data.ChunkTemperatureData;
+import agai.heatmod.debug.DebugConfig;
 import agai.heatmod.utils.SystemOutHelper;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -13,6 +19,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -24,7 +31,7 @@ import net.minecraftforge.items.ItemStackHandler;
 
 public class TestCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("capacities")
+        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("test")
                 .requires(source -> source.hasPermission(2)) // 要求管理员权限（等级2）
                     .then(Commands.literal("get")
                         .then(Commands.argument("type", IntegerArgumentType.integer())
@@ -41,17 +48,10 @@ public class TestCommand {
     // 执行获取温度的逻辑
     private static int executeGetTemperature(CommandContext<CommandSourceStack> context, int type) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
-        Level level = source.getLevel();
-        ChunkPos pos=new ChunkPos(new BlockPos((int) source.getEntity().getX(),0, (int) source.getEntity().getZ()));
-        BlockPos blockPos=new BlockPos((int) source.getEntity().getX(),(int) source.getEntity().getY(), (int) source.getEntity().getZ());
-        LevelChunk levelChunk = level.getChunk(pos.x, pos.z);
-
-        var globalLazy=level.getCapability(GlobalTemperatureCapability.CAPABILITY);
-        var chunkLazy=levelChunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-        SystemOutHelper.printfplain("registered?: chunk:%s  global:%s",ChunkTemperatureCapability.CAPABILITY.isRegistered()
-        ,GlobalTemperatureCapability.CAPABILITY.isRegistered());
-        SystemOutHelper.printfplain("registered2?: global:%s  chunk:%s  chunk_values:%s",globalLazy.orElse(null)
-        ,chunkLazy.orElse(null),chunkLazy.orElse(new ChunkTemperatureData(pos,context.getSource().getLevel())).getTemperature(blockPos));
+        ServerLevel level = source.getLevel();
+        DebugConfig.debug(DebugConfig.enumDebug.CHUNKCAPA,(t)->{
+            ThermalEngine.INSTANCE.applyThermodynamics(level,new ChunkPos(0,0));
+        });
 
         return 1; // 命令执行成功的返回值（约定为1）
     }

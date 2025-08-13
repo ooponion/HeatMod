@@ -1,6 +1,7 @@
 package agai.heatmod.data.temperature.recipeData;
 
 import agai.heatmod.data.temperature.properties.BlockThermalProperties;
+import agai.heatmod.utils.SystemOutHelper;
 import agai.heatmod.utils.recipe.CodecRecipeSerializer;
 import agai.heatmod.utils.recipe.DataContainerRecipe;
 import com.google.common.collect.ImmutableMap;
@@ -11,6 +12,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -63,10 +65,16 @@ public class BlockTempData{
     private int insulationLevel;//0-10
     private boolean isActiveSource;
     private float sourcePower;  //kw
-    
-    @Nullable
+
+    public static BlockTempData getDefaultData(Block block){
+        return new BlockTempData(block,getDefaultSourceTemperature(),0.2f,400f,0.1f,0.2f,3,false,getDefaultSourcePower());
+    }
     public static BlockTempData getData(Block block) {
-        return CACHE.get(block);
+        BlockTempData data = CACHE.get(block);
+        if(data == null){
+            return getDefaultData(block);
+        }
+        return data;
     }
 
     public static void updateCache(RecipeManager manager) {
@@ -145,7 +153,7 @@ public class BlockTempData{
         return sourcePower;
     }
     public static float getDefaultSourcePower() {
-        return 27;
+        return 0;
     }
     public static float getDefaultSourceTemperature() {
         return 27;

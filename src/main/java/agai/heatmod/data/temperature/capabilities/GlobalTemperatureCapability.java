@@ -52,15 +52,15 @@ public class GlobalTemperatureCapability implements ICapabilityProvider, INBTSer
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         GlobalTemperatureData.CODEC.encodeStart(NbtOps.INSTANCE, globalTemperatureData)
-                .resultOrPartial(error -> LOGGER.error("Failed to serialize: {}", error))
-                .ifPresent(nbt -> tag.put("Data", nbt));
+                .resultOrPartial(error -> LOGGER.error("Failed to serialize global:{}", error))
+                .ifPresent(nbt -> tag.put("data", nbt));
         return tag;
     }
 
     @Override
     public void deserializeNBT(CompoundTag nbt) {
-        GlobalTemperatureData.CODEC.parse(NbtOps.INSTANCE, nbt.get("Data"))
-                .resultOrPartial(error -> LOGGER.error("Failed to deserialize: {}", error))
+        GlobalTemperatureData.CODEC.parse(NbtOps.INSTANCE, nbt.get("data"))
+                .resultOrPartial(error -> LOGGER.error("Failed to deserialize global: {}", error))
                 .ifPresent(data -> this.globalTemperatureData = data);
     }
 }

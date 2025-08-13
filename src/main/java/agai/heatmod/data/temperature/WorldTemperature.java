@@ -6,6 +6,8 @@ import agai.heatmod.content.climate.WorldClimate;
 import agai.heatmod.data.temperature.recipeData.BiomeTempData;
 import agai.heatmod.data.temperature.recipeData.BlockTempData;
 import agai.heatmod.data.temperature.recipeData.DimensionTempData;
+import agai.heatmod.debug.DebugConfig;
+import agai.heatmod.utils.SystemOutHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -335,17 +337,11 @@ public class WorldTemperature {
     public static float heat(LevelReader world, BlockPos pos) {
         Block block = world.getBlockState(pos).getBlock();
         BlockTempData data=BlockTempData.getData(block);
-        if (data == null) {
-            return BlockTempData.getDefaultSourceTemperature();
-        }
         return data.getSourceTemperature();
     }
     public static float power(LevelReader world, BlockPos pos) {
         Block block = world.getBlockState(pos).getBlock();
         BlockTempData data=BlockTempData.getData(block);
-        if (data == null) {
-            return BlockTempData.getDefaultSourcePower();
-        }
         return data.getSourcePower();
     }
 

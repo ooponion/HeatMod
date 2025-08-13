@@ -2,18 +2,27 @@ package agai.heatmod.content.temperature.controllers;
 
 
 import agai.heatmod.annotators.InTest;
+import agai.heatmod.content.temperature.hotandcoolsources.ThermalChangeSource;
 import agai.heatmod.content.temperature.thermodynamics.HeatConduction;
 import agai.heatmod.content.temperature.thermodynamics.HeatConvection;
 import agai.heatmod.content.temperature.thermodynamics.HeatRadiation;
 import agai.heatmod.data.temperature.ThermalDataManager;
 import agai.heatmod.data.temperature.capabilities.ChunkTemperatureCapability;
+import agai.heatmod.data.temperature.data.impl.ChunkTemperatureIntf;
 import agai.heatmod.utils.ChunkUtils;
 import agai.heatmod.utils.SystemOutHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.common.util.LazyOptional;
+import org.antlr.v4.parse.v4ParserException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.Collectors;
 
 /**职责：温度系统的总控制器，协调所有温度相关计算和更新
  核心功能：
@@ -31,23 +40,179 @@ public class ThermalEngine {
     public ThermalEngine() {}
     /**This method will update the temperature of each visible block through thermodynamics.*/
     @InTest
-    public void applyThermodynamics(ServerLevel level) {
-        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
-            var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-            if(capability.isPresent()) {
-                capability.ifPresent(cap->{
-                    for(BlockPos blockPos:ChunkUtils.getAllBlockPosInChunk(chunk)) {
-                        heatConduction.conductHeatToNeighboursCache(level,blockPos);
-                        heatRadiation.radiateHeatToSurroundingsCache(level,blockPos);
-                        heatConvection.convectHeatToAirCache(level,blockPos);
+    public void applyThermodynamics(ServerLevel level, ChunkPos chunkPos) {
+
+        LevelChunk chunk= level.getChunk(chunkPos.x, chunkPos.z);
+        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
+        if(capability.isPresent()) {
+            capability.ifPresent(cap->{
+                SystemOutHelper.printfplain("applyThermodynamics:%s",chunk.getPos());
+                for(BlockPos blockPos:ChunkUtils.getAllBlockPosInChunk(chunk)) {
+                    heatConduction.conductHeatToNeighboursCache(level,blockPos);
+                    heatRadiation.radiateHeatToSurroundingsCache(level,blockPos);
+                    heatConvection.convectHeatToAirCache(level,blockPos);
+                }
+                SystemOutHelper.printfplain("applyThermodynamics2");
+            });
+        }else{
+            SystemOutHelper.printfplain("applyThermodynamics(), this chunk("+chunk.getPos()+") has no capability!");
+        }
+        SystemOutHelper.printfplain("applyThermodynamics-Chunk:%s",chunk.getPos());
+        ThermalDataManager.INSTANCE.transferChunkHeatFromCache(level,chunk.getPos());
+        SystemOutHelper.printfplain("applyThermodynamics-Chunk2");
+//        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
+//            var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
+//            if(capability.isPresent()) {
+//                capability.ifPresent(cap->{
+//                    SystemOutHelper.printfplain("applyThermodynamics:%s",chunk.getPos());
+//                    for(BlockPos blockPos:ChunkUtils.getAllBlockPosInChunk(chunk)) {
+//                        heatConduction.conductHeatToNeighboursCache(level,blockPos);
+//                        heatRadiation.radiateHeatToSurroundingsCache(level,blockPos);
+//                        heatConvection.convectHeatToAirCache(level,blockPos);
+//                    }
+//                    SystemOutHelper.printfplain("applyThermodynamics2");
+//                });
+//            }else{
+//                SystemOutHelper.printfplain("applyThermodynamics(), this chunk("+chunk.getPos()+") has no capability!");
+//            }
+//        }
+//        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
+//            SystemOutHelper.printfplain("applyThermodynamics-Chunk:%s",chunk.getPos());
+//            ThermalDataManager.INSTANCE.transferChunkHeatFromCache(level,chunk.getPos());
+//            SystemOutHelper.printfplain("applyThermodynamics-Chunk2:%s");
+//        }
+    }
+    /**
+     * 中距离区块的简化热力学更新（比完整计算轻量）
+     * @param level 世界实例
+     * @param chunkPos 目标区块坐标
+     * @param includeRadiation 是否保留辐射计算（部分中距离区块可能需要）
+     */
+    private void applySimplifiedThermodynamics(ServerLevel level, ChunkPos chunkPos, boolean includeRadiation) {
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+        chunk.getCapability(ChunkTemperatureCapability.CAPABILITY).ifPresent(cap -> {
+
+            for (BlockPos pos :  cap.getActiveThermalSources().stream().map(ThermalChangeSource::getBlockPos).toList()) {
+                heatConduction.conductHeatToNeighboursCache(level, pos);
+
+                if (includeRadiation) {
+                    heatRadiation.radiateHeatToSurroundingsCache(level, pos);
+                }
+            }
+            ThermalDataManager.INSTANCE.transferChunkHeatFromCache(level, chunkPos);
+
+            cap.updateAverageTemperature();
+        });
+    }
+    /**
+     * 远距离区块的平均温度更新（仅计算区块级温度，忽略内部方块）
+     * @param level 世界实例
+     * @param chunkPos 目标区块坐标
+     */
+    private void updateChunkAverageTemperature(ServerLevel level, ChunkPos chunkPos) {
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+        chunk.getCapability(ChunkTemperatureCapability.CAPABILITY).ifPresent(cap -> {
+            // 1. 计算周围8个方向区块的平均温度影响（只取已加载的区块）
+            float neighborSum = 0f;
+            int validNeighbors = 0;
+            int[][] directions = {{-1, -1}, {-1, 0}, {-1, 1},
+                    {0, -1},          {0, 1},
+                    {1, -1},  {1, 0}, {1, 1}};
+
+            for (int[] dir : directions) {
+                ChunkPos neighborPos = new ChunkPos(chunkPos.x + dir[0], chunkPos.z + dir[1]);
+                if (level.getChunkSource().hasChunk(neighborPos.x, neighborPos.z)) {
+                    // 获取邻居区块的平均温度
+                    LevelChunk neighborChunk = level.getChunk(neighborPos.x, neighborPos.z);
+                    float neighborAvg = neighborChunk.getCapability(ChunkTemperatureCapability.CAPABILITY)
+                            .map(ChunkTemperatureIntf::getAverageTemperature)
+                            .orElse(27f); // 默认为室温
+
+                    neighborSum += neighborAvg;
+                    validNeighbors++;
+                }
+            }
+
+            // 2. 计算邻居平均温度（若无邻居则保持当前温度）
+            float neighborAvg = validNeighbors > 0 ? (neighborSum / validNeighbors) : cap.getAverageTemperature();
+
+            float newAverage = cap.getAverageTemperature() * 0.8f    // 保留80%当前温度
+                    + neighborAvg * 0.2f;                   // 15%受邻居影响
+
+
+            // 4. 限制温度变化幅度（避免突变，更符合热力学规律）
+            float maxDelta = 0.5f; // 最大每步变化（°C）
+            newAverage = Math.max(
+                    cap.getAverageTemperature() - maxDelta,
+                    Math.min(newAverage, cap.getAverageTemperature() + maxDelta)
+            );
+            cap.setAverageTemperature(newAverage);
+
+//            // 5. 保存结果（若在异步线程中，先暂存到 ThermalDataManager；否则直接更新）
+//            if (Thread.currentThread().getName().contains("ForkJoinPool")) {
+//                // 异步线程：暂存到缓存，等待 syncAsyncResults 同步
+//                ThermalDataManager.INSTANCE.setAsyncChunkAverage(chunkPos, newAverage);
+//            } else {
+//                // 主线程：直接更新
+//
+//            }
+        });
+    }
+    public List<ChunkPos> updateChunks(ServerLevel level, Player player) {
+        BlockPos playerPos = player.blockPosition();
+        ChunkPos playerChunkPos = new ChunkPos(playerPos);
+        List<ChunkPos> chunkPosList=new ArrayList<>();
+        // 遍历以玩家为中心的区块范围（根据性能需求调整半径）
+        int maxDistance = 32; // 最大更新半径（区块数）
+        for (int dx = -maxDistance; dx <= maxDistance; dx++) {
+            for (int dz = -maxDistance; dz <= maxDistance; dz++) {
+                ChunkPos targetChunkPos = new ChunkPos(playerChunkPos.x + dx, playerChunkPos.z + dz);
+                int distance = Math.abs(dx) + Math.abs(dz); // 曼哈顿距离（简化计算）
+
+                // 根据距离选择更新策略
+                if (distance <= 4) {
+                    // 近距离：高精度实时更新（已有的 applyThermodynamics 逻辑）
+                    applyThermodynamics(level, targetChunkPos);
+                    chunkPosList.add(targetChunkPos);
+                } else if (distance <= 16) {
+                    // 中距离：每 20 游戏刻（1秒）更新一次，简化计算（忽略部分细节）
+                    if (level.getGameTime() % 20 == 0) {
+                        applySimplifiedThermodynamics(level, targetChunkPos, false); // 关闭辐射/对流等细节
+                        chunkPosList.add(targetChunkPos);
                     }
-                });
-            }else{
-                SystemOutHelper.printfplain("applyThermodynamics(), this chunk("+chunk.getPos()+") has no capability!");
+                } else if (distance <= 32&&isChunkActive(level, targetChunkPos)) {
+                    // 远距离：每 200 游戏刻（10秒）更新一次，只计算区块平均温度变化
+                    if (level.getGameTime() % 200 == 0) {
+                        updateChunkAverageTemperature(level, targetChunkPos); // 仅更新平均值
+                        chunkPosList.add(targetChunkPos);
+                    }
+                }
             }
         }
-        for (LevelChunk chunk:ChunkUtils.getAllLoadedLevelChunks(level)){
-            ThermalDataManager.INSTANCE.transferChunkHeatFromCache(level,chunk.getPos());
+        return chunkPosList;
+    }
+    private boolean isChunkActive(ServerLevel level, ChunkPos chunkPos) {
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+        return chunk.getCapability(ChunkTemperatureCapability.CAPABILITY)
+                .map(cap -> !cap.getActiveThermalSources().isEmpty()) // 有活跃热源
+                .orElse(false);
+    }
+    public void asyncUpdateChunks(ServerLevel level,Player player) {
+        ForkJoinPool.commonPool().execute(() -> {
+            var chunkPosList=updateChunks(level, player);
+            List<ChunkTemperatureIntf> capacities=chunkPosList
+                    .stream()
+                    .map(chunkPos->level.getChunk(chunkPos.x,chunkPos.z).getCapability(ChunkTemperatureCapability.CAPABILITY))
+                    .filter(LazyOptional::isPresent)
+                    .map(lazy->lazy.resolve().get())
+                    .toList();
+            level.getServer().execute(() -> syncAsyncResults(level, capacities));
+        });
+    }
+    public void syncAsyncResults(ServerLevel level, List<ChunkTemperatureIntf> capacities) {
+        for (ChunkTemperatureIntf chunkTemperatureIntf : capacities) {
+            var chunkPos=chunkTemperatureIntf.getChunkPos();
+            ThermalDataManager.INSTANCE.getChunkTempData(level,chunkPos).
         }
     }
 }

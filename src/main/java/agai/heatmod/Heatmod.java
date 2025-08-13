@@ -40,10 +40,10 @@ public class Heatmod {
         MinecraftForge.EVENT_BUS.addListener(BootstrapEvent::onServerStarting);//forge总线
         MinecraftForge.EVENT_BUS.addListener(BootstrapEvent::onServerStarted);
 
-
+        TempConfig.register();
         LOGGER.info(COMMON_INIT, "Loading Config");
 
-        TempConfig.register();
+
     }
     public void registries(IEventBus modEventBus){
         TempRecipeRegistry.register(modEventBus);

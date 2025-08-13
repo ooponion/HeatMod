@@ -112,7 +112,6 @@ minecraft {
             }
             jvmArgs "-DFile.Encoding=UTF-8"
             arg "-mixin.config=" + "heatmod.mixins.json"
-            arg "-uuid 1b0d7a26-a006-43e4-8b8d-f0371798e881"
         }
 
         server {

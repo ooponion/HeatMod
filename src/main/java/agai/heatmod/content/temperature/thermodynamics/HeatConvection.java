@@ -4,6 +4,7 @@ import agai.heatmod.annotators.InWorking;
 import agai.heatmod.config.TempConfig;
 import agai.heatmod.data.temperature.ThermalDataManager;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Blocks;
@@ -19,7 +20,7 @@ import net.minecraftforge.common.util.LazyOptional;
  * 处理封闭空间与开放空间的对流差异*/
 @InWorking
 public class HeatConvection {
-
+    public static final Direction[] directions=new Direction[]{Direction.UP};
     public static final LazyOptional<Double> INTERVAL_TIME = LazyOptional.of(()-> 0.05* TempConfig.Server.temperatureUpdateIntervalTicks.get()); // 1tick的时间（秒）
 
     // 空气对流核心参数
@@ -73,12 +74,11 @@ public class HeatConvection {
         if(!(state.is(Blocks.AIR)||state.is(Blocks.WATER))) {
             return;
         }
-        for (int dy = -1; dy <= 1; dy++) {
-            if (dy == 0) continue;
-            if(!level.isInWorldBounds(pos)){
+        for (Direction direction: directions) {
+            BlockPos neighborPos = pos.relative(direction);
+            if(!level.isInWorldBounds(neighborPos)){
                 continue;
             }
-            BlockPos neighborPos = pos.offset(0, dy, 0);
             state =level.getBlockState(neighborPos);
             if(!(state.is(Blocks.AIR)||state.is(Blocks.WATER))) {
                 continue;

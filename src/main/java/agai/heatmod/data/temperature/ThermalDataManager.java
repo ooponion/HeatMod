@@ -12,6 +12,8 @@ import agai.heatmod.data.temperature.capabilities.ChunkTemperatureCapability;
 import agai.heatmod.data.temperature.data.ChunkTemperatureData;
 import agai.heatmod.data.temperature.data.impl.ChunkTemperatureIntf;
 import agai.heatmod.data.temperature.recipeData.BlockTempData;
+import agai.heatmod.debug.DebugConfig;
+import agai.heatmod.utils.BlockPosUtils;
 import agai.heatmod.utils.ChunkUtils;
 import agai.heatmod.utils.SystemOutHelper;
 import com.google.common.cache.Cache;
@@ -32,6 +34,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @InWorking
 
@@ -44,13 +47,15 @@ public class ThermalDataManager {
 
     public static final ThermalDataManager INSTANCE = new ThermalDataManager();
 
-//    private final int primeRange=3;
-//    private final int secondRange=10;
-//    private final int thirdRange=32;
-    private final Cache<Long, ChunkTemperatureIntf> chunkCache = CacheBuilder.newBuilder()
+    // 缓存ChunkTemperatureIntf，设置过期时间避免内存泄漏
+    private final Cache<ChunkWithLevelKey, ChunkTemperatureIntf> chunkCache = CacheBuilder.newBuilder()
             .maximumSize(1000)
+            .expireAfterAccess(10, TimeUnit.MINUTES)
             .build();
 
+    /**
+     * 获取方块温度（优化版：减少区块获取和Capability解析开销）
+     */
     public float getTemperature(@NotNull ResourceKey<Level> levelResourceKey, BlockPos pos) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         ServerLevel level = server.getLevel(levelResourceKey);
@@ -61,113 +66,138 @@ public class ThermalDataManager {
     }
 
     public float getTemperature(Level level, BlockPos pos) {
-        LevelChunk chunk = (LevelChunk) level.getChunk(pos);
-        var capability = chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-        return capability.orElse(new ChunkTemperatureData(level)).getTemperature(pos);
+        ChunkPos chunkPos = new ChunkPos(pos);
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+
+
+        ChunkTemperatureIntf tempData = getChunkTempData(chunk);
+        return tempData.getTemperature(pos);
     }
-    public void setTemperature(@NotNull ResourceKey<Level> levelResourceKey, BlockPos pos,float temperature) {
+
+    /**
+     * 设置方块温度（修复递归错误，优化性能）
+     */
+    public void setTemperature(@NotNull ResourceKey<Level> levelResourceKey, BlockPos pos, float temperature) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         ServerLevel level = server.getLevel(levelResourceKey);
         if (level == null) {
             throw new IllegalStateException("Level is null");
         }
-        setTemperature(levelResourceKey, pos, temperature);
+        setTemperature(level, pos, temperature);
     }
-    public void setTemperature(Level level, BlockPos pos,float temperature) {
-        LevelChunk chunk= (LevelChunk) level.getChunk(pos);
-        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-        if(capability.isPresent()) {
-            capability.ifPresent(cap->cap.setTemperature(pos, temperature));
-        }else{
-            SystemOutHelper.printfplain("setTemperature(), this chunk("+pos+") has no capability!");
+
+    public void setTemperature(Level level, BlockPos pos, float temperature) {
+        ChunkPos chunkPos = new ChunkPos(pos);
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+
+        ChunkTemperatureIntf tempData = getChunkTempData(chunk);
+        tempData.setTemperature(pos, temperature);
+    }
+
+    /**
+     * 从缓存转移区块热量（优化方块遍历效率）
+     */
+    public void transferChunkHeatFromCache(Level level, ChunkPos chunkPos) {
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+        ChunkTemperatureIntf tempData = getChunkTempData(chunk);
+
+        for(BlockPos pos: ChunkUtils.getAllBlockPosInChunk(chunk)) {
+            tempData.transferTempFromCache(pos);
         }
     }
 
-//    /**刷新一个范围的数据*/
-//    public void refreshSources(Level level, BlockPos pos) {
-//        for(ChunkPos chunkPos: ChunkUtils.findCircularChunks(pos,thirdRange)) {
-//            LevelChunk chunk= level.getChunk(chunkPos.x,chunkPos.z);
-//            var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-//            if(capability.isPresent()) {
-//                capability.ifPresent(cap->cap.refreshSources(chunk));
-//            }else{
-//                SystemOutHelper.printfplain("refreshSources(), this chunk("+chunk.getPos()+") has no capability!");
-//            }
-//        }
-//    }
-//
-//    public void addSource(Level level, BlockPos blockPos) {
-//        LevelChunk chunk= (LevelChunk) level.getChunk(blockPos);
-//        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-//        if(capability.isPresent()) {
-//            capability.ifPresent(cap->cap.addSource(chunk,blockPos));
-//        }else{
-//            SystemOutHelper.printfplain("addSource(), this chunk("+chunk.getPos()+") has no capability!");
-//        }
-//    }
-//
-//    public void removeSource(Level level, BlockPos blockPos) {
-//        LevelChunk chunk= (LevelChunk) level.getChunk(blockPos);
-//        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-//        if(capability.isPresent()) {
-//            capability.ifPresent(cap->cap.removeSource(chunk,blockPos));
-//        }else{
-//            SystemOutHelper.printfplain("removeSource(), this chunk("+chunk.getPos()+") has no capability!");
-//        }
-//    }
+    /**
+     * 累积方块热量到缓存（移除高频调试输出）
+     */
+    public void accumulateBlockHeatToCache(Level level, BlockPos pos, float joule) {
+        ChunkPos chunkPos = new ChunkPos(pos);
+        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+        ChunkTemperatureIntf tempData = getChunkTempData(chunk);
 
-    public void updateAverageTemperature() {
+//         DebugConfig.debug(()->SystemOutHelper.printfplain("accumulateBlockHeatToCache!%s", pos));
 
+        tempData.accumulateTempToCache(pos, calBlockTempDiffFromJoule(level, pos, joule));
     }
 
-    public void transferChunkHeatFromCache(Level level,ChunkPos chunkPos) {
-        LevelChunk chunk= level.getChunk(chunkPos.x,chunkPos.z);
-        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-        if(capability.isPresent()) {
-            capability.ifPresent(cap->{
-                for(BlockPos blockPos:ChunkUtils.getAllBlockPosInChunk(chunk)) {
-                    cap.transferTempFromCache(blockPos);
-                }
-            });
-        }else{
-            SystemOutHelper.printfplain("transferHeatFromCache(), this chunk("+chunk.getPos()+") has no capability!");
-        }
-    }
-    public void accumulateBlockHeatToCache(Level level,BlockPos pos,float joule) {
-
-        LevelChunk chunk= (LevelChunk) level.getChunk(pos);
-        var capability =chunk.getCapability(ChunkTemperatureCapability.CAPABILITY);
-        if(capability.isPresent()) {
-            capability.ifPresent(cap->{
-                cap.accumulateTempToCache(pos,calBlockTempDiffFromJoule(level,pos,joule));
-            });
-        }else{
-            SystemOutHelper.printfplain("accumulateBlockHeatToCache(), this chunk("+chunk.getPos()+") has no capability!");
-        }
-    }
-    @Nullable
+    /**
+     * 获取方块温度数据（减少重复获取BlockState）
+     */
     public BlockTempData getBlockTempData(Level level, BlockPos pos) {
-        BlockState fromState =level.getBlockState(pos);
-        return BlockTempData.getData(fromState.getBlock());
+        BlockState state = level.getBlockState(pos);
+        return BlockTempData.getData(state.getBlock());
     }
-    @Nullable
+
     public BlockTempData getBlockTempData(ChunkAccess chunkAccess, BlockPos pos) {
-        BlockState fromState =chunkAccess.getBlockState(pos);
-        return BlockTempData.getData(fromState.getBlock());
+        BlockState state = chunkAccess.getBlockState(pos);
+        return BlockTempData.getData(state.getBlock());
     }
 
-
-
-
-    public boolean isSource(ChunkAccess chunkAccess, BlockPos blockPos){
-        return ThermalDataManager.INSTANCE.getBlockTempData(chunkAccess,blockPos)!=null&&ThermalDataManager.INSTANCE.getBlockTempData(chunkAccess,blockPos).isActiveSource();
+    public boolean isSource(ChunkAccess chunkAccess, BlockPos blockPos) {
+        BlockTempData data = getBlockTempData(chunkAccess, blockPos);
+        return data != null && data.isActiveSource();
     }
 
-    public float calBlockTempDiffFromJoule(Level level, BlockPos pos,float joule) {
-        BlockTempData data=getBlockTempData(level,pos);
-        if(data==null) {
-            return 0;
-        }
+    public float calBlockTempDiffFromJoule(Level level, BlockPos pos, float joule) {
+        BlockTempData data = getBlockTempData(level, pos);
         return joule / (data.getSpecificHeatCapacity() * data.getMass());
+    }
+
+    /**
+     * 内部工具：获取区块温度数据（优先从缓存获取，减少Capability解析）
+     */
+    public ChunkTemperatureIntf getChunkTempData(LevelChunk chunk) {
+        try {
+//            DebugConfig.debug(()->{
+//                SystemOutHelper.printCallers("ChunkWithLevelKey.keyOf(%s",0, ChunkWithLevelKey.keyOf(chunk).toString());
+//            });
+//            if(DebugConfig.ENABLE_HEAT_DEBUG){
+//                return chunkCache.get(ChunkWithLevelKey.keyOf(chunk),()->chunk.getCapability(ChunkTemperatureCapability.CAPABILITY)
+//                        .orElseGet(() -> new ChunkTemperatureData(new ChunkPos(100,100), chunk.getLevel())));
+//            }
+            return chunkCache.get(ChunkWithLevelKey.keyOf(chunk), () ->
+                    chunk.getCapability(ChunkTemperatureCapability.CAPABILITY)
+                            .orElseGet(() -> new ChunkTemperatureData(chunk.getPos(), chunk.getLevel()))
+            );
+        } catch (Exception e) {
+            return chunk.getCapability(ChunkTemperatureCapability.CAPABILITY)
+                    .orElse(new ChunkTemperatureData(chunk.getPos(), chunk.getLevel()));
+        }
+    }
+    public ChunkTemperatureIntf getChunkTempData(ServerLevel level,ChunkPos chunkPos) {
+        return getChunkTempData(level.getChunk(chunkPos.x, chunkPos.z));
+    }
+
+    public static class ChunkWithLevelKey {
+        private final ResourceKey<Level> dimension; // 世界维度的唯一键
+        private final ChunkPos chunkPos;
+
+        public ChunkWithLevelKey(Level level, ChunkPos chunkPos) {
+            this.dimension = level.dimension();
+            this.chunkPos = chunkPos;
+        }
+
+        // 重写 equals 用于判断是否为同一世界的同一区块
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ChunkWithLevelKey that = (ChunkWithLevelKey) o;
+            return dimension.equals(that.dimension) && chunkPos.equals(that.chunkPos);
+        }
+
+        // 重写 hashCode 用于哈希表存储
+        @Override
+        public int hashCode() {
+            return 31 * dimension.hashCode() + chunkPos.hashCode();
+        }
+
+        public static ChunkWithLevelKey keyOf(LevelChunk chunk){
+            return new ChunkWithLevelKey(chunk.getLevel(),chunk.getPos());
+        }
+
+        @Override
+        public String toString() {
+            return "dimension:"+dimension.toString()+", chunkPos:"+chunkPos;
+        }
     }
 }

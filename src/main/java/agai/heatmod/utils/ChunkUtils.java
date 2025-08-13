@@ -2,6 +2,7 @@ package agai.heatmod.utils;
 
 import agai.heatmod.annotators.InTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerChunkCache;
@@ -14,7 +15,9 @@ import net.minecraft.world.level.ChunkPos;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @InTest
 public class ChunkUtils {
@@ -117,5 +120,53 @@ public class ChunkUtils {
             }
         }
         return  blockPos;
+    }
+    public class ChunkBlockPosIterator implements Iterator<BlockPos> {
+        private final LevelChunk chunk;
+        private final int minY;
+        private final int maxY;
+        private final int chunkWorldX;
+        private final int chunkWorldZ;
+
+        // 迭代状态
+        private int x = 0;
+        private int z = 0;
+        private int y;
+        private final BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+
+        public ChunkBlockPosIterator(LevelChunk chunk) {
+            this.chunk = chunk;
+            this.minY = chunk.getMinBuildHeight();
+            this.maxY = chunk.getMaxBuildHeight();
+            this.y = minY;
+
+            this.chunkWorldX = chunk.getPos().getMinBlockX();
+            this.chunkWorldZ = chunk.getPos().getMinBlockZ();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return x < 16 && z < 16 && y < maxY;
+        }
+
+        @Override
+        public BlockPos next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException("没有更多方块坐标");
+            }
+
+            mutablePos.set(chunkWorldX + x, y, chunkWorldZ + z);
+
+            x++;
+            if (x >= 16) {
+                x = 0;
+                z++;
+                if (z >= 16) {
+                    z = 0;
+                    y++;
+                }
+            }
+            return mutablePos;
+        }
     }
 }

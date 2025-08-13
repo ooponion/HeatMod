@@ -1,6 +1,7 @@
 package agai.heatmod.content.temperature.thermodynamics;
 
 import agai.heatmod.annotators.InWorking;
+import agai.heatmod.annotators.NeedImprovement;
 import agai.heatmod.config.TempConfig;
 import agai.heatmod.data.temperature.ThermalDataManager;
 import agai.heatmod.data.temperature.recipeData.BlockTempData;
@@ -16,6 +17,7 @@ import net.minecraftforge.common.util.LazyOptional;
  * 考虑距离衰减（平方反比定律）
  * 处理不同方块对辐射的吸收 / 反射率*/
 @InWorking
+@NeedImprovement//需要考虑方块遮挡
 public class HeatRadiation {
     public static final int MAX_RADIATION_DISTANCE=12;// it is constant now
     public static final LazyOptional<Double> INTERVAL_TIME = LazyOptional.of(()-> 0.05* TempConfig.Server.temperatureUpdateIntervalTicks.get()); // 1tick的时间（秒）
@@ -37,8 +39,6 @@ public class HeatRadiation {
         float toTemp=ThermalDataManager.INSTANCE.getTemperature((Level) levelReader,to);
         BlockTempData fromData=ThermalDataManager.INSTANCE.getBlockTempData((Level) levelReader,from);
         BlockTempData toData=ThermalDataManager.INSTANCE.getBlockTempData((Level) levelReader,to);
-        if(fromData==null||toData==null) return 0;
-
         double t1 = fromTemp + 273.15;
         double t2 = toTemp + 273.15;
 
@@ -65,21 +65,22 @@ public class HeatRadiation {
      */
     public void radiateHeatToSurroundingsCache(Level level, BlockPos pos) {
         int range = MAX_RADIATION_DISTANCE;
+        for(BlockPos targetPos :BlockPos.withinManhattan(pos,range,range,range)){
+            if (targetPos.equals(pos)) continue;
+            if(!level.isInWorldBounds(targetPos)){
+                continue;
+            }
+
+            float radiatedHeat = calculateNonContactRadiationHeat(level,pos,targetPos);
+            if (Math.abs(radiatedHeat) < 0.001) continue; // 忽略微小热量传递
+
+            ThermalDataManager.INSTANCE.accumulateBlockHeatToCache(level,pos,-radiatedHeat);
+            ThermalDataManager.INSTANCE.accumulateBlockHeatToCache(level,targetPos,radiatedHeat);
+        }
         for (int dx = -range; dx <= range; dx++) {
             for (int dy = -range; dy <= range; dy++) {
                 for (int dz = -range; dz <= range; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    if(!level.isInWorldBounds(pos)){
-                        continue;
-                    }
 
-                    BlockPos targetPos = pos.offset(dx, dy, dz);
-
-                    float radiatedHeat = calculateNonContactRadiationHeat(level,pos,targetPos);
-                    if (Math.abs(radiatedHeat) < 0.001) continue; // 忽略微小热量传递
-
-                    ThermalDataManager.INSTANCE.accumulateBlockHeatToCache(level,pos,-radiatedHeat);
-                    ThermalDataManager.INSTANCE.accumulateBlockHeatToCache(level,targetPos,radiatedHeat);
                 }
             }
         }

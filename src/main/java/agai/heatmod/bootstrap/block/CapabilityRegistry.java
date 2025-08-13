@@ -27,8 +27,9 @@ public class CapabilityRegistry {
     public static void attachCaps(AttachCapabilitiesEvent event) {
         if(event.getObject() instanceof LevelChunk chunk) {
             if(!chunk.getCapability(ChunkTemperatureCapability.CAPABILITY).isPresent()) {
-                event.addCapability(new ResourceLocation(MODID,"chunk_cap"),new ChunkTemperatureCapability(new ChunkTemperatureData(chunk.getPos(),chunk.getLevel().dimension(),37f,chunk.getLevel())));
-                SystemOutHelper.printfplain("attachCaps_1");
+                var result=new ChunkTemperatureCapability(new ChunkTemperatureData(chunk.getPos(),chunk.getLevel()));
+                event.addCapability(new ResourceLocation(MODID,"chunk_cap"),result);
+                //SystemOutHelper.printfplain("attachCaps_chunkPos:%s,%s",chunk.getPos(),((ChunkTemperatureData)result.getChunkTemperatureData()).getChunkPos());
             }else{
                 SystemOutHelper.printfplain("attachCaps Fails Level:%s",chunk.getPos().toString());
             }

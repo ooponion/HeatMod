@@ -28,7 +28,6 @@ public class TempRecipeRegistry {
             ForgeRegistries.RECIPE_TYPES, MODID);
 
     static {
-        SystemOutHelper.printfplain("Registering Recipe Serializers."+ ArmorTempData.TYPE);
         ArmorTempData.TYPE = createCodecRecipeType("armor_temp", ArmorTempData.CODEC);
         BiomeTempData.TYPE = createCodecRecipeType("biome_temp", BiomeTempData.CODEC);
         BlockTempData.TYPE = createCodecRecipeType("block_temp", BlockTempData.CODEC);

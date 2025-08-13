@@ -8,6 +8,7 @@ import agai.heatmod.utils.SystemOutHelper;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraftforge.common.capabilities.*;
 import net.minecraftforge.common.util.INBTSerializable;
 import net.minecraftforge.common.util.LazyOptional;
@@ -48,16 +49,26 @@ public class ChunkTemperatureCapability  implements ICapabilityProvider, INBTSer
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
-        ChunkTemperatureData.CODEC.encodeStart(NbtOps.INSTANCE, chunkTemperatureData)
-                .resultOrPartial(error -> SystemOutHelper.printfplain("Failed to serialize: %s", error))
-                .ifPresent(nbt -> tag.put("data", nbt));
+        var result =ChunkTemperatureData.CODEC.encodeStart(NbtOps.INSTANCE, chunkTemperatureData);
+        Object encoded = result.getOrThrow(true,
+                errorMsg -> System.out.println("Failed to serialize chunk:" + errorMsg)
+        );
+
+        // 编码成功，正常放入标签
+        if (encoded instanceof Tag nbtTag) {
+            tag.put("data", nbtTag);
+        } else {
+            System.out.println("编码结果不是 NBT 标签，类型: " + encoded.getClass().getSimpleName());
+        }
         return tag;
     }
 
     @Override
     public void deserializeNBT(CompoundTag nbt) {
-        ChunkTemperatureData.CODEC.parse(NbtOps.INSTANCE, nbt.get("data"))
-                .resultOrPartial(error -> SystemOutHelper.printfplain("Failed to deserialize: %s", error))
-                .ifPresent(data -> this.chunkTemperatureData = data);
+        var result=ChunkTemperatureData.CODEC.parse(NbtOps.INSTANCE, nbt.get("data"));
+        var object=result.getOrThrow(true,errorMsg -> System.out.println("Failed to deserialize chunk:" + errorMsg));
+        if(object != null) {
+            this.chunkTemperatureData=object;
+        }
     }
 }

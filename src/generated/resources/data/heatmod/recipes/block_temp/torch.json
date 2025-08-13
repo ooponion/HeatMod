@@ -2,11 +2,11 @@
   "type": "heatmod:block_temp",
   "block":"minecraft:torch",
   "temperature": 200,
-  "emissivity": 10,
+  "emissivity": 1,
   "specificHeatCapacity": 400,
   "thermalConductivity": 0.1,
   "mass": 0.2,
-  "insulationLevel": 8,
+  "insulationLevel": 7,
   "isActiveSource": true,
   "sourcePower": 10
 }

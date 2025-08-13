@@ -2,20 +2,19 @@ package agai.heatmod.schedulers;
 
 import agai.heatmod.annotators.NeedImprovement;
 import agai.heatmod.content.temperature.controllers.ThermalEngine;
-import agai.heatmod.data.temperature.ThermalDataManager;
-import agai.heatmod.utils.ChunkUtils;
+import agai.heatmod.debug.DebugConfig;
+import agai.heatmod.utils.SystemOutHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.*;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.common.ForgeConfig;
 import net.minecraftforge.event.TickEvent;
-
-import java.util.Comparator;
-import java.util.UUID;
 
 @NeedImprovement
 public class TemperatureScheduler {
     public static final TemperatureScheduler INSTANCE = new TemperatureScheduler();
+    private long tick=1100;
 //    public static final TicketType<TemperatureUpdateTicket> TEMP_TICKET =
 //            TicketType.create("temperature", Comparator.comparingInt(t -> t.priority));
 //
@@ -45,9 +44,18 @@ public class TemperatureScheduler {
             }
         }
     }
-    public void onLevelTick(TickEvent.LevelTickEvent event) {
-        if (event.phase == TickEvent.Phase.START && event.level instanceof ServerLevel level) {
-            ThermalEngine.INSTANCE.applyThermodynamics(level);
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.START) {
+            if(tick%20==0){
+                SystemOutHelper.printfplain("Seconds:::::%s",tick/20);
+            }
+            if(tick%1200==0){
+                var server=event.getServer();
+                for(ServerLevel level:server.getAllLevels()){
+                    ThermalEngine.INSTANCE.applyThermodynamics(level,new ChunkPos(0,0));
+                }
+            }
+            tick++;
         }
     }
 }
